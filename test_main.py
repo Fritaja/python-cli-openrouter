@@ -29,10 +29,40 @@ def test_main_valid_name(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert captured.out == "Hello, Goran!\n"
 
-def test_main_empty_name(monkeypatch, capsys):
-    monkeypatch.setattr("builtins.input", lambda _: "")
+def test_main_empty_then_valid_name(monkeypatch, capsys):
+    inputs = iter(["", "Goran"])
+    monkeypatch.setattr("builtins.input", lambda _: next(inputs))
 
     main()
 
     captured = capsys.readouterr()
-    assert captured.out == "Error: Name cannot be empty\n"
+    assert captured.out == "Error: Name cannot be empty\nHello, Goran!\n"
+
+def test_main_whitespace_then_valid_name(monkeypatch, capsys):
+    inputs = iter(["   ", "Goran"])
+    monkeypatch.setattr("builtins.input", lambda _: next(inputs))
+
+    main()
+
+    captured = capsys.readouterr()
+    assert captured.out == "Error: Name cannot be empty\nHello, Goran!\n"
+
+def test_main_asks_again_until_valid(monkeypatch, capsys):
+    calls = []
+    inputs = iter(["", "  ", "Goran"])
+
+    def fake_input(prompt):
+        calls.append(prompt)
+        return next(inputs)
+
+    monkeypatch.setattr("builtins.input", fake_input)
+
+    main()
+
+    captured = capsys.readouterr()
+    assert len(calls) == 3
+    assert captured.out == (
+        "Error: Name cannot be empty\n"
+        "Error: Name cannot be empty\n"
+        "Hello, Goran!\n"
+    )

@@ -10,14 +10,16 @@ def greet(name):
 
 
 def main():
-    user_name = input("What is your name? ")
+    while True:
+        user_name = input("What is your name? ")
 
-    try:
-        message = greet(user_name)
-        print(message)
+        try:
+            message = greet(user_name)
+            print(message)
+            break
 
-    except ValueError as error:
-        print(f"Error: {error}")
+        except ValueError as error:
+            print(f"Error: {error}")
 
 
 if __name__ == "__main__":
