@@ -1,4 +1,6 @@
 def greet(name):
+    if not isinstance(name, str):
+        raise TypeError("Name must be a string")
     clean_name = name.strip()
 
     if not clean_name:
