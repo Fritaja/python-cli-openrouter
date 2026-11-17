@@ -1,7 +1,10 @@
 import json
 import os
-import urllib.request
+import time
 import urllib.error
+import urllib.request
+
+from retry_example import calculate_delay
 
 
 def is_response_incomplete(finish_reason):
@@ -22,6 +25,8 @@ def ask_model(question, api_key):
         "max_completion_tokens": 300
     }
 
+    max_attempts = 3
+
     json_data = json.dumps(data).encode("utf-8")
 
     request = urllib.request.Request(
@@ -34,15 +39,23 @@ def ask_model(question, api_key):
         method="POST"
     )
 
-    try:
-        with urllib.request.urlopen(request, timeout=60) as response:
-            return json.loads(response.read().decode("utf-8"))
+    for attempt in range(max_attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return json.loads(response.read().decode("utf-8"))
 
-    except urllib.error.HTTPError as error:
-        print("HTTP Error:", error.code)
+        except urllib.error.HTTPError as error:
+            print("HTTP Error:", error.code)
+            if error.code != 429 or attempt == max_attempts - 1:
+                return None
 
-    except urllib.error.URLError as error:
-        print("Connection Error:", error.reason)
+            delay = calculate_delay(attempt)
+            print(f"Retrying after {delay}s...")
+            time.sleep(delay)
+
+        except urllib.error.URLError as error:
+            print("Connection Error:", error.reason)
+            return None
 
     return None
 
