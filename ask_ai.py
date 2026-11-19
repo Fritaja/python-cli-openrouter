@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 import time
@@ -60,13 +61,29 @@ def ask_model(question, api_key):
     return None
 
 
-def main():
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Ask an AI model a question using OpenRouter."
+    )
+    parser.add_argument(
+        "--question",
+        help="Question to ask. If omitted, the program asks interactively."
+    )
+    args = parser.parse_args(argv)
+
+    question = None
+    if args.question is not None:
+        question = args.question.strip()
+        if not question:
+            raise SystemExit("Error: Question cannot be empty")
+
     api_key = os.getenv("OPENROUTER_API_KEY")
 
     if not api_key:
         raise SystemExit("Error: API key is missing")
 
-    question = input("Ask AI: ").strip()
+    if question is None:
+        question = input("Ask AI: ").strip()
 
     if not question:
         raise SystemExit("Error: Question cannot be empty")

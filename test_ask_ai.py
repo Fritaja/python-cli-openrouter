@@ -79,7 +79,7 @@ def test_main_prints_response_details(monkeypatch, capsys):
         lambda question, api_key: make_result(),
     )
 
-    ask_ai.main()
+    ask_ai.main([])
 
     output = capsys.readouterr().out
     assert "AI response:\nHi\n" in output
@@ -101,7 +101,7 @@ def test_main_shows_warning_when_incomplete(monkeypatch, capsys):
         lambda question, api_key: make_result(finish_reason="length"),
     )
 
-    ask_ai.main()
+    ask_ai.main([])
 
     output = capsys.readouterr().out
     assert "WARNING: AI response was cut off.\n" in output
@@ -117,7 +117,7 @@ def test_main_handles_none_answer(monkeypatch, capsys):
         lambda question, api_key: make_result(content=None),
     )
 
-    ask_ai.main()
+    ask_ai.main([])
 
     output = capsys.readouterr().out
     assert "AI response:\n(No answer)\n" in output
@@ -133,7 +133,7 @@ def test_main_empty_question_exits(monkeypatch):
     monkeypatch.setattr(ask_ai, "ask_model", fail)
 
     with pytest.raises(SystemExit, match="Question cannot be empty"):
-        ask_ai.main()
+        ask_ai.main([])
 
 
 def test_main_missing_api_key_exits_before_input(monkeypatch):
@@ -149,7 +149,83 @@ def test_main_missing_api_key_exits_before_input(monkeypatch):
     monkeypatch.setattr(ask_ai, "ask_model", fail_model)
 
     with pytest.raises(SystemExit, match="API key is missing"):
-        ask_ai.main()
+        ask_ai.main([])
+
+
+def test_main_uses_question_argument(monkeypatch, capsys):
+    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: "test-key")
+    calls = []
+
+    def fail_input(prompt):
+        raise AssertionError("input should not be called")
+
+    def fake_ask_model(question, api_key):
+        calls.append((question, api_key))
+        return make_result()
+
+    monkeypatch.setattr("builtins.input", fail_input)
+    monkeypatch.setattr(ask_ai, "ask_model", fake_ask_model)
+
+    ask_ai.main(["--question", "  What is Python?  "])
+
+    assert calls == [("What is Python?", "test-key")]
+    assert "AI response:\nHi\n" in capsys.readouterr().out
+
+
+def test_main_interactive_fallback(monkeypatch, capsys):
+    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: "test-key")
+    prompts = []
+    calls = []
+
+    def fake_input(prompt):
+        prompts.append(prompt)
+        return "Hello"
+
+    def fake_ask_model(question, api_key):
+        calls.append((question, api_key))
+        return make_result()
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    monkeypatch.setattr(ask_ai, "ask_model", fake_ask_model)
+
+    ask_ai.main([])
+
+    assert prompts == ["Ask AI: "]
+    assert calls == [("Hello", "test-key")]
+    assert "AI response:\nHi\n" in capsys.readouterr().out
+
+
+def test_main_help(monkeypatch, capsys):
+    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: None)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("help should stop before this")
+
+    monkeypatch.setattr("builtins.input", fail)
+    monkeypatch.setattr(ask_ai, "ask_model", fail)
+
+    with pytest.raises(SystemExit) as error:
+        ask_ai.main(["--help"])
+
+    assert error.value.code == 0
+    output = capsys.readouterr().out
+    assert "usage:" in output
+    assert "Ask an AI model a question using OpenRouter." in output
+    assert "--question" in output
+
+
+@pytest.mark.parametrize("question", ["", "   ", "\t\n"])
+def test_main_cli_empty_question_exits(monkeypatch, question):
+    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: "test-key")
+
+    def fail(*args, **kwargs):
+        raise AssertionError("ask_model should not be called")
+
+    monkeypatch.setattr("builtins.input", fail)
+    monkeypatch.setattr(ask_ai, "ask_model", fail)
+
+    with pytest.raises(SystemExit, match="Question cannot be empty"):
+        ask_ai.main(["--question", question])
 
 
 def test_ask_model_sends_expected_request(monkeypatch):
