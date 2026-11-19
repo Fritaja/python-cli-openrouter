@@ -2,7 +2,7 @@ import json
 import urllib.request
 import urllib.error
 
-url = "https://example.invalid/users/1"
+url = "https://jsonplaceholder.typicode.com/users/1"
 
 try:
     with urllib.request.urlopen(url, timeout=10) as response:

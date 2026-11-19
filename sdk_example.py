@@ -22,9 +22,6 @@ def main():
             stream=False,
         )
 
-        print("AI response:")
-        print(response.choices[0].message.content)
-
         answer = response.choices[0].message.content
 
         print("AI response:")

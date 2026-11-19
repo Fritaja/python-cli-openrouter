@@ -71,7 +71,7 @@ def test_is_response_incomplete(finish_reason, expected):
 
 
 def test_main_prints_response_details(monkeypatch, capsys):
-    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: "test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("builtins.input", lambda prompt: "Hello")
     monkeypatch.setattr(
         ask_ai,
@@ -93,7 +93,7 @@ def test_main_prints_response_details(monkeypatch, capsys):
 
 
 def test_main_shows_warning_when_incomplete(monkeypatch, capsys):
-    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: "test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("builtins.input", lambda prompt: "Hello")
     monkeypatch.setattr(
         ask_ai,
@@ -109,7 +109,7 @@ def test_main_shows_warning_when_incomplete(monkeypatch, capsys):
 
 
 def test_main_handles_none_answer(monkeypatch, capsys):
-    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: "test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("builtins.input", lambda prompt: "Hello")
     monkeypatch.setattr(
         ask_ai,
@@ -123,8 +123,68 @@ def test_main_handles_none_answer(monkeypatch, capsys):
     assert "AI response:\n(No answer)\n" in output
 
 
+def test_main_exits_when_request_fails(monkeypatch, capsys):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(ask_ai, "ask_model", lambda question, api_key: None)
+
+    with pytest.raises(SystemExit) as error:
+        ask_ai.main(["--question", "Hello"])
+
+    assert error.value.code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "Error: Request failed\n"
+    assert "test-key" not in captured.err
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        [],
+        {},
+        {"choices": []},
+        {"choices": None},
+        {"choices": "bad"},
+        {"choices": [None]},
+        {"choices": [{}]},
+        {"choices": [{"message": None}]},
+        {"choices": [{"message": "not a dict"}]},
+    ],
+)
+def test_main_handles_malformed_response(monkeypatch, capsys, result):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(ask_ai, "ask_model", lambda question, api_key: result)
+
+    with pytest.raises(SystemExit) as error:
+        ask_ai.main(["--question", "Hello"])
+
+    assert error.value.code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "Error: Unexpected API response\n"
+    assert "test-key" not in captured.err
+
+
+@pytest.mark.parametrize(
+    "bad_usage",
+    [None, "bad", {"completion_tokens_details": "bad"}],
+)
+def test_main_handles_invalid_usage_details(monkeypatch, capsys, bad_usage):
+    result = make_result()
+    result["usage"] = bad_usage
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setattr(ask_ai, "ask_model", lambda question, api_key: result)
+
+    ask_ai.main(["--question", "Hello"])
+
+    output = capsys.readouterr().out
+    assert "AI response:\nHi\n" in output
+    assert "Input tokens: N/A\n" in output
+    assert "Reasoning tokens: N/A\n" in output
+
+
 def test_main_empty_question_exits(monkeypatch):
-    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: "test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr("builtins.input", lambda prompt: "   ")
 
     def fail(question, api_key):
@@ -137,7 +197,7 @@ def test_main_empty_question_exits(monkeypatch):
 
 
 def test_main_missing_api_key_exits_before_input(monkeypatch):
-    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: None)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     def fail_input(prompt):
         raise AssertionError("input should not be called")
@@ -153,7 +213,7 @@ def test_main_missing_api_key_exits_before_input(monkeypatch):
 
 
 def test_main_uses_question_argument(monkeypatch, capsys):
-    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: "test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     calls = []
 
     def fail_input(prompt):
@@ -173,7 +233,7 @@ def test_main_uses_question_argument(monkeypatch, capsys):
 
 
 def test_main_interactive_fallback(monkeypatch, capsys):
-    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: "test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     prompts = []
     calls = []
 
@@ -196,7 +256,7 @@ def test_main_interactive_fallback(monkeypatch, capsys):
 
 
 def test_main_help(monkeypatch, capsys):
-    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: None)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     def fail(*args, **kwargs):
         raise AssertionError("help should stop before this")
@@ -216,7 +276,7 @@ def test_main_help(monkeypatch, capsys):
 
 @pytest.mark.parametrize("question", ["", "   ", "\t\n"])
 def test_main_cli_empty_question_exits(monkeypatch, question):
-    monkeypatch.setattr(ask_ai.os, "getenv", lambda name: "test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
     def fail(*args, **kwargs):
         raise AssertionError("ask_model should not be called")
@@ -268,7 +328,9 @@ def test_ask_model_handles_http_error(monkeypatch, capsys):
     monkeypatch.setattr(ask_ai.urllib.request, "urlopen", fake_urlopen)
 
     assert ask_ai.ask_model("Hello", "test-key") is None
-    assert capsys.readouterr().out == "HTTP Error: 401\n"
+    captured = capsys.readouterr()
+    assert captured.err == "HTTP Error: 401\n"
+    assert captured.out == ""
 
 
 def test_ask_model_handles_url_error(monkeypatch, capsys):
@@ -278,7 +340,32 @@ def test_ask_model_handles_url_error(monkeypatch, capsys):
     monkeypatch.setattr(ask_ai.urllib.request, "urlopen", fake_urlopen)
 
     assert ask_ai.ask_model("Hello", "test-key") is None
-    assert capsys.readouterr().out == "Connection Error: offline\n"
+    captured = capsys.readouterr()
+    assert captured.err == "Connection Error: offline\n"
+    assert captured.out == ""
+
+
+def test_ask_model_handles_invalid_json(monkeypatch, capsys):
+    class InvalidResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def read(self):
+            return b"not json"
+
+    monkeypatch.setattr(
+        ask_ai.urllib.request,
+        "urlopen",
+        lambda request, timeout: InvalidResponse(),
+    )
+
+    assert ask_ai.ask_model("Hello", "test-key") is None
+    captured = capsys.readouterr()
+    assert captured.err == "Error: Invalid response from API\n"
+    assert captured.out == ""
 
 
 def test_ask_model_success_without_retry(monkeypatch):
@@ -318,9 +405,10 @@ def test_ask_model_retries_429_then_succeeds(monkeypatch, capsys):
     assert calls == [60, 60]
     assert sleeps == [1]
 
-    output = capsys.readouterr().out
-    assert "HTTP Error: 429\n" in output
-    assert "Retrying after 1s...\n" in output
+    captured = capsys.readouterr()
+    assert "HTTP Error: 429\n" in captured.err
+    assert "Retrying after 1s...\n" in captured.err
+    assert captured.out == ""
 
 
 def test_ask_model_stops_after_three_429_failures(monkeypatch, capsys):
@@ -338,11 +426,12 @@ def test_ask_model_stops_after_three_429_failures(monkeypatch, capsys):
     assert calls == [60, 60, 60]
     assert sleeps == [1, 2]
 
-    output = capsys.readouterr().out
-    assert output.count("HTTP Error: 429\n") == 3
-    assert "Retrying after 1s...\n" in output
-    assert "Retrying after 2s...\n" in output
-    assert "Retrying after 4s..." not in output
+    captured = capsys.readouterr()
+    assert captured.err.count("HTTP Error: 429\n") == 3
+    assert "Retrying after 1s...\n" in captured.err
+    assert "Retrying after 2s...\n" in captured.err
+    assert "Retrying after 4s..." not in captured.err
+    assert captured.out == ""
 
 
 def test_ask_model_does_not_retry_401(monkeypatch, capsys):
@@ -359,4 +448,6 @@ def test_ask_model_does_not_retry_401(monkeypatch, capsys):
     assert ask_ai.ask_model("Hello", "test-key") is None
     assert calls == [60]
     assert sleeps == []
-    assert capsys.readouterr().out == "HTTP Error: 401\n"
+    captured = capsys.readouterr()
+    assert captured.err == "HTTP Error: 401\n"
+    assert captured.out == ""

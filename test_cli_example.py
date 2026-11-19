@@ -1,12 +1,16 @@
 import subprocess
 import sys
+from pathlib import Path
+
+SCRIPT = str(Path(__file__).with_name("cli_example.py"))
 
 
 def test_cli_valid_name():
     result = subprocess.run(
-        [sys.executable, "cli_example.py", "--name", "Ivan"],
+        [sys.executable, SCRIPT, "--name", "Ivan"],
         capture_output=True,
         text=True,
+        timeout=10,
     )
 
     assert result.returncode == 0
@@ -15,9 +19,10 @@ def test_cli_valid_name():
 
 def test_cli_missing_name():
     result = subprocess.run(
-        [sys.executable, "cli_example.py"],
+        [sys.executable, SCRIPT],
         capture_output=True,
         text=True,
+        timeout=10,
     )
 
     assert result.returncode == 2

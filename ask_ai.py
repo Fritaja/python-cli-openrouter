@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -46,16 +47,20 @@ def ask_model(question, api_key):
                 return json.loads(response.read().decode("utf-8"))
 
         except urllib.error.HTTPError as error:
-            print("HTTP Error:", error.code)
+            print("HTTP Error:", error.code, file=sys.stderr)
             if error.code != 429 or attempt == max_attempts - 1:
                 return None
 
             delay = calculate_delay(attempt)
-            print(f"Retrying after {delay}s...")
+            print(f"Retrying after {delay}s...", file=sys.stderr)
             time.sleep(delay)
 
         except urllib.error.URLError as error:
-            print("Connection Error:", error.reason)
+            print("Connection Error:", error.reason, file=sys.stderr)
+            return None
+
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            print("Error: Invalid response from API", file=sys.stderr)
             return None
 
     return None
@@ -91,14 +96,38 @@ def main(argv=None):
     result = ask_model(question, api_key)
 
     if result is None:
-        return
+        print("Error: Request failed", file=sys.stderr)
+        raise SystemExit(1)
 
-    answer = result["choices"][0]["message"].get("content")
+    if not isinstance(result, dict):
+        print("Error: Unexpected API response", file=sys.stderr)
+        raise SystemExit(1)
+
+    choices = result.get("choices")
+    if not isinstance(choices, list) or not choices:
+        print("Error: Unexpected API response", file=sys.stderr)
+        raise SystemExit(1)
+
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        print("Error: Unexpected API response", file=sys.stderr)
+        raise SystemExit(1)
+
+    message = choice.get("message")
+    if not isinstance(message, dict):
+        print("Error: Unexpected API response", file=sys.stderr)
+        raise SystemExit(1)
+
+    answer = message.get("content")
 
     model = result.get("model", "Unknown")
-    usage = result.get("usage") or {}
-    finish_reason = result["choices"][0].get("finish_reason")
-    token_details = usage.get("completion_tokens_details") or {}
+    usage = result.get("usage")
+    if not isinstance(usage, dict):
+        usage = {}
+    finish_reason = choice.get("finish_reason")
+    token_details = usage.get("completion_tokens_details")
+    if not isinstance(token_details, dict):
+        token_details = {}
 
     print("AI response:")
     if answer is None:
