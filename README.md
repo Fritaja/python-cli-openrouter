@@ -33,8 +33,8 @@ A Python project combining OpenRouter API integration, command-line tools, HTTP 
 Clone the repository:
 
 ```bash
-git clone <repository-url>
-cd ivan-ai-learning
+git clone https://github.com/Fritaja/python-cli-openrouter.git
+cd python-cli-openrouter
 ```
 
 Create and activate a virtual environment:
